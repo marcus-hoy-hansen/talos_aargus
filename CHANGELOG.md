@@ -17,6 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <!--changelog-start-->
 <!--latest-start-->
 
+[Unreleased]
+
+### Changed
+
+  * `fastspliceai_cache` now checks the shared cache in a local CPU process
+    before submitting work to Slurm. Fully cached reruns do not request a GPU;
+    only missing normalized alleles are sent to the FastSpliceAI GPU process.
+
 [11.1.0] - 2026-07
 
 ### Removed

@@ -106,6 +106,8 @@ preflight/results/
 nextflow_test_output/
 nextflow_test_output_apptainer/
 .nextflow-apptainer/
+/logs/
+runner/synthetic_one_proband_two_variants/cohort_outputs_fastcache/
 
 # mkdocs
 site/

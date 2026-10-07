@@ -514,6 +514,7 @@ def preflight_view() -> rx.Component:
             rx.heading("Nextflow Screen Output", size="3"),
             rx.text_area(
                 id="preflight-screen-log",
+                key=AppState.preflight_log_revision,
                 value=AppState.preflight_output,
                 read_only=True,
                 height="340px",
@@ -527,6 +528,7 @@ def preflight_view() -> rx.Component:
             rx.heading("Slurm Stderr / Warnings", size="3"),
             rx.text_area(
                 id="preflight-stderr-log",
+                key=AppState.preflight_log_revision,
                 value=AppState.preflight_stderr_output,
                 read_only=True,
                 height="180px",
@@ -540,6 +542,7 @@ def preflight_view() -> rx.Component:
             rx.heading("Nextflow Log Tail", size="3"),
             rx.text_area(
                 id="preflight-nextflow-log",
+                key=AppState.preflight_log_revision,
                 value=AppState.preflight_nextflow_log,
                 read_only=True,
                 height="260px",
@@ -602,15 +605,19 @@ def talos_view() -> rx.Component:
                     AppState.talos_conda_env,
                     AppState.set_talos_conda_env,
                 ),
-                rx.checkbox(
-                    "Annotate SpliceAI",
-                    checked=AppState.talos_spliceai_enabled,
-                    on_change=AppState.set_talos_spliceai_enabled,
+                rx.select(
+                    ["disabled", "precomputed", "fastspliceai", "fastspliceai_cache"],
+                    value=AppState.talos_spliceai_mode,
+                    on_change=AppState.set_talos_spliceai_mode,
+                    width="100%",
                 ),
-                config_field(
-                    "SpliceAI VCF",
-                    AppState.talos_spliceai_vcf,
-                    AppState.set_talos_spliceai_vcf,
+                rx.cond(
+                    AppState.talos_spliceai_mode == "precomputed",
+                    config_field(
+                        "SpliceAI VCF",
+                        AppState.talos_spliceai_vcf,
+                        AppState.set_talos_spliceai_vcf,
+                    ),
                 ),
                 rx.checkbox(
                     "Resume Nextflow",
@@ -665,6 +672,7 @@ def talos_view() -> rx.Component:
             rx.heading("TALOS Screen Output", size="3"),
             rx.text_area(
                 id="talos-screen-log",
+                key=AppState.talos_log_revision,
                 value=AppState.talos_output,
                 read_only=True,
                 height="360px",
@@ -678,6 +686,7 @@ def talos_view() -> rx.Component:
             rx.heading("Slurm Stderr / Warnings", size="3"),
             rx.text_area(
                 id="talos-stderr-log",
+                key=AppState.talos_log_revision,
                 value=AppState.talos_stderr_output,
                 read_only=True,
                 height="200px",
@@ -691,6 +700,7 @@ def talos_view() -> rx.Component:
             rx.heading("Nextflow Log Tail", size="3"),
             rx.text_area(
                 id="talos-nextflow-log",
+                key=AppState.talos_log_revision,
                 value=AppState.talos_nextflow_log,
                 read_only=True,
                 height="260px",

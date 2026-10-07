@@ -105,6 +105,91 @@ bash build_apptainer_frontend.sh
 bash run_nextflow_example_apptainer.sh
 ```
 
+### SpliceAI Modes
+
+The main workflow supports four explicit SpliceAI modes:
+
+- `precomputed` (default): copy `INFO/SpliceAI` from an indexed resource VCF
+- `fastspliceai`: compute scores once on the normalized collective cohort VCF
+- `fastspliceai_cache`: compute only normalized alleles absent from a shared cache
+- `disabled`: do not add SpliceAI annotation
+
+Precomputed lookup remains the standard native run:
+
+```bash
+nextflow -c nextflow.config run main.nf \
+  --input_tsv /path/to/talos_input.tsv \
+  --processed_annotations processed_annotations \
+  --spliceai_mode precomputed \
+  --spliceai_vcf /path/to/spliceai_scores.vcf.gz \
+  -output-dir /path/to/talos_outputs
+```
+
+Direct `fastspliceai` mode is submitted as one GPU process on the normalized
+collective VCF, before it is split for the ordinary CPU annotation tasks. Add
+the GPU process configuration and provide the executable and reference:
+
+FastSpliceAI is deliberately kept as a separate Git checkout from
+[`MOMA-AUH/FastSpliceAI`](https://github.com/MOMA-AUH/FastSpliceAI), with its
+own shared environment. It is not vendored into `talos_aargus` and is not part
+of this repository's Git history. The workflow only calls the configured
+`fastspliceai_bin` executable.
+
+```bash
+nextflow \
+  -c nextflow.config \
+  -c runner/talos_fastspliceai.config \
+  run main.nf \
+  --input_tsv /path/to/talos_input.tsv \
+  --processed_annotations processed_annotations \
+  --spliceai_mode fastspliceai \
+  --fastspliceai_bin /path/to/fastspliceai_pip/bin/spliceai \
+  --fastspliceai_reference large_files/ref.fa \
+  -output-dir /path/to/talos_outputs
+```
+
+For repeated cohorts, use a shared genotype-free VCF cache. It records every
+evaluated normalized allele, including alleles without a useful score. Cache
+misses are scored, merged under a file lock, and `INFO/SpliceAI` is then copied
+onto the full cohort VCF without changing genotypes:
+
+```bash
+nextflow \
+  -c nextflow.config \
+  -c runner/talos_fastspliceai.config \
+  run main.nf \
+  --input_tsv /path/to/talos_input.tsv \
+  --processed_annotations processed_annotations \
+  --spliceai_mode fastspliceai_cache \
+  --fastspliceai_bin /path/to/fastspliceai_pip/bin/spliceai \
+  --fastspliceai_reference large_files/ref.fa \
+  --fastspliceai_cache /shared/fastspliceai_cache.vcf.gz \
+  -output-dir /path/to/talos_outputs
+```
+
+Keep separate cache paths for each FastSpliceAI release, model configuration,
+and reference build. Full parameter details are in
+[`docs/NextflowConfiguration.md`](docs/NextflowConfiguration.md).
+
+In `fastspliceai_cache` mode, cache inspection runs as a local CPU process
+first. A fully cached rerun does not submit a GPU job. If new normalized
+alleles are found, only those alleles are submitted to the GPU process; the
+successful results are merged into the shared cache under a file lock.
+
+### Web Runner
+
+The optional Reflex runner is a web interface only: it submits the same
+standalone preflight, preparation, and TALOS scripts that can be run from a
+terminal. Its project defaults, shared resources, runtime paths, and GPU
+settings are configured in [`runner/runner.config`](runner/runner.config).
+
+```bash
+REFLEX_CONDA_ENV=/faststorage/project/reanalyses_auh/env/talos2_env \
+  bash runner/run_reflex_excel_runner.sh
+```
+
+See [`runner/README.md`](runner/README.md) for runner usage and configuration.
+
 ### Standalone Preflight
 
 The AUH preflight workflow is kept separate from Talos proper under [`preflight/`](preflight/).

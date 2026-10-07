@@ -128,6 +128,28 @@ The preflight workflow can still do legacy SpliceAI lookup if explicitly
 enabled, but it is off by default and the main annotation workflow is preferred.
 Disable main-workflow SpliceAI explicitly with `--spliceai_enabled false`.
 
+FastSpliceAI can compute scores once on the normalized collective cohort VCF
+before Talos splits it for CPU annotation:
+
+```bash
+nextflow \
+    -c nextflow.config \
+    -c runner/talos_fastspliceai.config \
+    run main.nf \
+    --input_tsv nextflow/inputs/test.tsv \
+    --spliceai_mode fastspliceai \
+    --fastspliceai_bin /path/to/fastspliceai_pip/bin/spliceai \
+    --fastspliceai_reference /path/to/ref.fa \
+    -output-dir <path_to_output_dir>
+```
+
+Use `--spliceai_mode fastspliceai_cache` with
+`--fastspliceai_cache /shared/cache.vcf.gz` to reuse prior scores. The cache is an indexed,
+genotype-free VCF. It is updated under a lock and must be versioned by the
+FastSpliceAI release, model settings, and reference build. Cache inspection
+runs locally before any GPU task is submitted. Fully cached runs therefore do
+not wait in the GPU queue; only missing alleles create a GPU task.
+
 For subsequent cycles after the data has already been annotated, use the Talos-only entry point:
 
 ```bash

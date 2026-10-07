@@ -3,12 +3,12 @@ process FILTER_COMMON_DBSNP {
     memory 2.GB
 
     input:
-    tuple path(vcf), path(vcf_idx)
+    tuple val(sample_id), path(vcf), path(vcf_idx)
     path resource_vcf
     path resource_vcf_idx
 
     output:
-    tuple path('cohort_merged.vcf.gz'), path('cohort_merged.vcf.gz.tbi'), emit: vcf
+    tuple val(sample_id), path("${sample_id}.filtered.vcf.gz"), path("${sample_id}.filtered.vcf.gz.tbi"), emit: vcf
 
     script:
     """
@@ -25,14 +25,14 @@ process FILTER_COMMON_DBSNP {
       "${resource_vcf}"
 
     if [[ -f "\${tmp_dir}/0000.vcf" ]]; then
-      bcftools view -Oz -o cohort_merged.vcf.gz "\${tmp_dir}/0000.vcf"
+      bcftools view -Oz -o "${sample_id}.filtered.vcf.gz" "\${tmp_dir}/0000.vcf"
     elif [[ -f "\${tmp_dir}/0000.vcf.gz" ]]; then
-      cp -f "\${tmp_dir}/0000.vcf.gz" cohort_merged.vcf.gz
+      cp -f "\${tmp_dir}/0000.vcf.gz" "${sample_id}.filtered.vcf.gz"
     else
       echo "bcftools isec did not produce expected output" >&2
       exit 1
     fi
 
-    bcftools index -t -f cohort_merged.vcf.gz
+    bcftools index -t -f "${sample_id}.filtered.vcf.gz"
     """
 }

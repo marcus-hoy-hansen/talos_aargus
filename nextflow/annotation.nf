@@ -15,9 +15,15 @@ The specific annotations are:
 
 include { AnnotateCsqWithBcftools } from './modules/annotation/AnnotateCsqWithBcftools/main'
 include { AnnotateWithEchtvar } from './modules/annotation/AnnotateWithEchtvar/main'
+include { AnnotateWithFastSpliceAi } from './modules/annotation/AnnotateWithFastSpliceAi/main'
+include { AnnotateFastSpliceAiFromCache } from './modules/annotation/AnnotateFastSpliceAiFromCache/main'
 include { AnnotateWithSpliceAi } from './modules/annotation/AnnotateWithSpliceAi/main'
+include { CheckFastSpliceAiCache } from './modules/annotation/CheckFastSpliceAiCache/main'
+include { IndexVcf } from './modules/annotation/IndexVcf/main'
+include { MergeFastSpliceAiCache } from './modules/annotation/MergeFastSpliceAiCache/main'
 include { MergeVcfsWithBcftools } from './modules/annotation/MergeVcfsWithBcftools/main'
 include { NormaliseAndRegionFilterVcf } from './modules/annotation/NormaliseAndRegionFilterVcf/main'
+include { RunFastSpliceAi } from './modules/annotation/RunFastSpliceAi/main'
 include { SplitVcf } from './modules/annotation/SplitVcf/main'
 
 def processedAnnotationPath(String name) {
@@ -26,6 +32,18 @@ def processedAnnotationPath(String name) {
 
 def paramEnabled(value) {
     return value instanceof Boolean ? value : value?.toString()?.toBoolean()
+}
+
+def spliceaiMode() {
+    if (params.spliceai_mode) {
+        def mode = params.spliceai_mode.toString().toLowerCase()
+        if (!(mode in ['precomputed', 'fastspliceai', 'fastspliceai_cache', 'disabled'])) {
+            println "Invalid --spliceai_mode: ${params.spliceai_mode}. Use precomputed, fastspliceai, fastspliceai_cache, or disabled."
+            exit 1
+        }
+        return mode
+    }
+    return paramEnabled(params.spliceai_enabled) ? 'precomputed' : 'disabled'
 }
 
 workflow ANNOTATION {
@@ -63,6 +81,8 @@ workflow ANNOTATION {
         single_vcf: it[2] == 'vcf'
     }
 
+    def spliceai_mode = spliceaiMode()
+
     // Process shards
     ch_from_shards = ch_inputs_branched.shards.flatMap { cohort, path, _type ->
         def vcfs = files("${path}/*.${params.input_vcf_extension}")
@@ -87,30 +107,112 @@ workflow ANNOTATION {
         tuple(cohort, file(path, checkIfExists: true))
     }
 
-    // Combine single VCFs and merged VCFs
-    ch_to_split = ch_single_vcfs.mix(ch_merged_vcfs)
+    // Combine single VCFs and merged VCFs. FastSpliceAI is deliberately run
+    // here as one cohort job, after ROI normalization and before splitting.
+    ch_collective_vcfs = ch_single_vcfs.mix(ch_merged_vcfs)
 
-    if ((params.vcf_split_n ?: 0) > 0) {
-        SplitVcf(ch_to_split)
-        ch_vcfs = SplitVcf.out.flatMap { cohort, splits ->
-            def split_list = splits instanceof Collection ? splits : [splits]
-            split_list.collect { tuple(cohort, it) }
+    if (spliceai_mode in ['fastspliceai', 'fastspliceai_cache']) {
+        if (!params.fastspliceai_bin) {
+            println '--fastspliceai_bin is required when --spliceai_mode fastspliceai'
+            exit 1
         }
+        def fastspliceai_reference = params.fastspliceai_reference ?: params.ref_genome
+        if (!file(fastspliceai_reference).exists()) {
+            println "FastSpliceAI reference does not exist: ${fastspliceai_reference}"
+            exit 1
+        }
+        if (!file("${fastspliceai_reference}.fai").exists()) {
+            println "FastSpliceAI reference index does not exist: ${fastspliceai_reference}.fai"
+            exit 1
+        }
+        def fastspliceai_cache = ''
+        if (spliceai_mode == 'fastspliceai_cache') {
+            if (!params.fastspliceai_cache) {
+                println '--fastspliceai_cache is required when --spliceai_mode fastspliceai_cache'
+                exit 1
+            }
+            fastspliceai_cache = file(params.fastspliceai_cache).toString()
+        }
+
+        NormaliseAndRegionFilterVcf(
+            ch_collective_vcfs,
+            ch_merged_bed,
+            ch_ref_genome,
+        )
+        if (spliceai_mode == 'fastspliceai') {
+            AnnotateWithFastSpliceAi(
+                NormaliseAndRegionFilterVcf.out,
+                channel.value(file(fastspliceai_reference).toString()),
+                channel.value(''),
+            )
+            ch_fastspliceai_vcfs = AnnotateWithFastSpliceAi.out
+        } else {
+            CheckFastSpliceAiCache(
+                NormaliseAndRegionFilterVcf.out,
+                channel.value(file(fastspliceai_cache).toString()),
+            )
+            def checked = CheckFastSpliceAiCache.out.checked
+            def cache_hits = checked.filter { it[7].text.trim() == '0' }
+            def cache_misses = checked.filter { it[7].text.trim() != '0' }
+
+            AnnotateFastSpliceAiFromCache(
+                cache_hits.map { cohort, vcf, vcf_index, sites, sites_index, misses, misses_index, status ->
+                    tuple(cohort, vcf, vcf_index)
+                },
+                channel.value(file(fastspliceai_cache).toString()),
+            )
+            RunFastSpliceAi(
+                cache_misses.map { cohort, vcf, vcf_index, sites, sites_index, misses, misses_index, status ->
+                    tuple(cohort, vcf, vcf_index, misses, misses_index, status)
+                },
+                channel.value(file(fastspliceai_reference).toString()),
+            )
+            MergeFastSpliceAiCache(
+                RunFastSpliceAi.out.additions,
+                channel.value(file(fastspliceai_cache).toString()),
+            )
+            ch_fastspliceai_vcfs = AnnotateFastSpliceAiFromCache.out.annotated.mix(MergeFastSpliceAiCache.out.annotated)
+        }
+
+        if ((params.vcf_split_n ?: 0) > 0) {
+            SplitVcf(ch_fastspliceai_vcfs.map { cohort, vcf, fastspliceai_index -> tuple(cohort, vcf) })
+            ch_fastspliceai_splits = SplitVcf.out.flatMap { cohort, splits ->
+                def split_list = splits instanceof Collection ? splits : [splits]
+                split_list.collect { tuple(cohort, it) }
+            }
+            IndexVcf(ch_fastspliceai_splits)
+            ch_all_vcfs = IndexVcf.out
+        } else {
+            ch_all_vcfs = ch_fastspliceai_vcfs
+        }
+
+        // FastSpliceAI must see one cohort VCF. Existing split inputs are not
+        // equivalent and are therefore rejected rather than partly annotated.
+        ch_all_vcfs = ch_all_vcfs.mix(ch_inputs_branched.shards.map { ignored_shard ->
+            throw new IllegalArgumentException('FastSpliceAI modes do not support input type shards')
+        })
     } else {
-        ch_vcfs = ch_to_split
+        if ((params.vcf_split_n ?: 0) > 0) {
+            SplitVcf(ch_collective_vcfs)
+            ch_vcfs = SplitVcf.out.flatMap { cohort, splits ->
+                def split_list = splits instanceof Collection ? splits : [splits]
+                split_list.collect { tuple(cohort, it) }
+            }
+        } else {
+            ch_vcfs = ch_collective_vcfs
+        }
+        ch_all_vcfs = ch_vcfs.mix(ch_from_shards)
+
+	    NormaliseAndRegionFilterVcf(
+            ch_all_vcfs,
+            ch_merged_bed,
+            ch_ref_genome,
+        )
+        ch_all_vcfs = NormaliseAndRegionFilterVcf.out
     }
 
-    // mix in shards
-    ch_all_vcfs = ch_vcfs.mix(ch_from_shards)
-
-	NormaliseAndRegionFilterVcf(
-        ch_all_vcfs,
-        ch_merged_bed,
-        ch_ref_genome,
-    )
-
 	AnnotateWithEchtvar(
-        NormaliseAndRegionFilterVcf.out,
+        ch_all_vcfs,
         ch_gnomad_zip,
         ch_alphamissense_zip,
     )
@@ -124,7 +226,7 @@ workflow ANNOTATION {
 
     ch_annotated_vcfs = AnnotateCsqWithBcftools.out
 
-    if (paramEnabled(params.spliceai_enabled)) {
+    if (spliceai_mode == 'precomputed') {
         if (!params.spliceai_vcf) {
             println '--spliceai_vcf is required when --spliceai_enabled is true'
             exit 1

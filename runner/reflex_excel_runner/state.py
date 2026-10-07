@@ -85,6 +85,7 @@ class AppState(rx.State):
     preflight_output: str = ""
     preflight_stderr_output: str = ""
     preflight_nextflow_log: str = ""
+    preflight_log_revision: int = 0
     preflight_status: str = "Idle"
     preflight_job_id: str = ""
     preflight_sbatch_script: str = ""
@@ -97,8 +98,17 @@ class AppState(rx.State):
     talos_processed_annotations: str = str(TALOS_REPO_DIR / "processed_annotations")
     talos_nextflow_config: str = "config/dept_local.config"
     talos_conda_env: str = "talos2_env"
-    talos_spliceai_enabled: bool = True
+    talos_spliceai_mode: str = "precomputed"
     talos_spliceai_vcf: str = "/faststorage/project/reanalyses_auh/resources/spliceai_scores_KGA_AUH_GRCh_38_Homo_sapiens_converted.vcf.gz"
+    talos_fastspliceai_bin: str = "/faststorage/project/reanalyses_auh/env/fastspliceai_pip/bin/spliceai"
+    talos_fastspliceai_reference: str = str(TALOS_REPO_DIR / "large_files" / "ref.fa")
+    talos_fastspliceai_cache: str = str(TALOS_REPO_DIR / "processed_annotations" / "fastspliceai" / "cache.vcf.gz")
+    talos_fastspliceai_nextflow_config: str = str(TALOS_REPO_DIR / "runner" / "talos_fastspliceai.config")
+    talos_fastspliceai_queue: str = "gpu-l40s,gpu-h200"
+    talos_fastspliceai_cluster_options: str = "--account=reanalyses_auh --gpus=1"
+    talos_fastspliceai_cpus: str = "6"
+    talos_fastspliceai_mem: str = "16G"
+    talos_fastspliceai_time: str = "08:00:00"
     talos_log_dir: str = "logs"
     talos_job_name: str = "talos_full"
     talos_cpus: str = "6"
@@ -109,10 +119,12 @@ class AppState(rx.State):
     talos_output: str = ""
     talos_stderr_output: str = ""
     talos_nextflow_log: str = ""
+    talos_log_revision: int = 0
     talos_status: str = "Idle"
     talos_job_id: str = ""
     talos_sbatch_script: str = ""
     talos_running: bool = False
+    settings_loaded: bool = False
     log_autorefresh_running: bool = False
 
     @rx.var
@@ -125,9 +137,11 @@ class AppState(rx.State):
     def on_load(self):
         ensure_dirs()
         ensure_sample_excel()
-        self.load_rows_from_path(SAMPLE_FILE)
-        self.reload_config()
-        self.refresh_preflight_projects()
+        if not self.settings_loaded:
+            self.load_rows_from_path(SAMPLE_FILE)
+            self.reload_config()
+            self.refresh_preflight_projects()
+            self.settings_loaded = True
         self.refresh_preflight_state()
         self.refresh_talos_state()
         return AppState.autorefresh_logs
@@ -142,10 +156,14 @@ class AppState(rx.State):
         while True:
             await asyncio.sleep(30)
             async with self:
-                if self.active_tab == "preflight":
+                if self.preflight_running:
                     self._refresh_preflight_log(update_status=False)
-                elif self.active_tab == "talos":
+                if self.talos_running:
                     self._refresh_talos_log(update_status=False)
+                if not self.preflight_running and not self.talos_running:
+                    self.log_autorefresh_running = False
+                    return
+            yield
 
     def load_runner_settings(self):
         config = config_io.load_runner_config(self.config_path)
@@ -205,11 +223,21 @@ class AppState(rx.State):
         )
         self.talos_nextflow_config = config.get("TALOS_NEXTFLOW_CONFIG", self.talos_nextflow_config)
         self.talos_conda_env = config.get("TALOS_CONDA_ENV", self.talos_conda_env)
-        self.talos_spliceai_enabled = config.get(
-            "TALOS_SPLICEAI_ENABLED",
-            str(self.talos_spliceai_enabled),
-        ).lower() == "true"
+        self.talos_spliceai_mode = config.get("TALOS_SPLICEAI_MODE", self.talos_spliceai_mode)
         self.talos_spliceai_vcf = config.get("TALOS_SPLICEAI_VCF", self.talos_spliceai_vcf)
+        self.talos_fastspliceai_bin = config.get("TALOS_FASTSPLICEAI_BIN", self.talos_fastspliceai_bin)
+        self.talos_fastspliceai_reference = config.get("TALOS_FASTSPLICEAI_REFERENCE", self.talos_fastspliceai_reference)
+        self.talos_fastspliceai_cache = config.get("TALOS_FASTSPLICEAI_CACHE", self.talos_fastspliceai_cache)
+        self.talos_fastspliceai_nextflow_config = config.get(
+            "TALOS_FASTSPLICEAI_NEXTFLOW_CONFIG", self.talos_fastspliceai_nextflow_config,
+        )
+        self.talos_fastspliceai_queue = config.get("TALOS_FASTSPLICEAI_QUEUE", self.talos_fastspliceai_queue)
+        self.talos_fastspliceai_cluster_options = config.get(
+            "TALOS_FASTSPLICEAI_CLUSTER_OPTIONS", self.talos_fastspliceai_cluster_options,
+        )
+        self.talos_fastspliceai_cpus = config.get("TALOS_FASTSPLICEAI_CPUS", self.talos_fastspliceai_cpus)
+        self.talos_fastspliceai_mem = config.get("TALOS_FASTSPLICEAI_MEM", self.talos_fastspliceai_mem)
+        self.talos_fastspliceai_time = config.get("TALOS_FASTSPLICEAI_TIME", self.talos_fastspliceai_time)
         self.talos_log_dir = config.get("TALOS_LOG_DIR", self.talos_log_dir)
         self.talos_job_name = config.get("TALOS_JOB_NAME", self.talos_job_name)
         self.talos_cpus = config.get("TALOS_CPUS", self.talos_cpus)
@@ -674,8 +702,8 @@ class AppState(rx.State):
                 self.preflight_status = "Submit failed"
                 self.status = self.preflight_status
             yield
-            self.refresh_preflight_log()
-            yield
+            self._refresh_preflight_log(update_status=False)
+            yield AppState.autorefresh_logs
         except Exception as error:
             self.preflight_output += f"\nERROR: {error}\n"
             self.preflight_status = "Failed"
@@ -698,7 +726,7 @@ class AppState(rx.State):
         self.preflight_status = f"Cancel requested {job_id}"
         self.status = self.preflight_status
         yield
-        self.refresh_preflight_log()
+        self._refresh_preflight_log(update_status=False)
         yield
 
     def _refresh_preflight_log(self, update_status: bool):
@@ -713,6 +741,7 @@ class AppState(rx.State):
         self.preflight_output = screen_output
         self.preflight_stderr_output = stderr_output
         self.preflight_nextflow_log = nextflow_log
+        self.preflight_log_revision += 1
         if update_status:
             if self.preflight_job_id:
                 self.status = f"Refreshed preflight log for {self.preflight_job_id}"
@@ -721,6 +750,7 @@ class AppState(rx.State):
 
     def refresh_preflight_log(self):
         self._refresh_preflight_log(update_status=True)
+        yield
 
     def set_talos_project_dir(self, value: str):
         self.talos_project_dir = value
@@ -755,8 +785,8 @@ class AppState(rx.State):
         self.talos_resume = value
         self.update_talos_command_preview()
 
-    def set_talos_spliceai_enabled(self, value: bool):
-        self.talos_spliceai_enabled = value
+    def set_talos_spliceai_mode(self, value: str):
+        self.talos_spliceai_mode = value
         self.update_talos_command_preview()
 
     def set_talos_spliceai_vcf(self, value: str):
@@ -777,8 +807,17 @@ class AppState(rx.State):
                 self.talos_nextflow_config,
                 self.talos_conda_env,
                 self.talos_resume,
-                self.talos_spliceai_enabled,
+                self.talos_spliceai_mode,
                 self.talos_spliceai_vcf,
+                self.talos_fastspliceai_bin,
+                self.talos_fastspliceai_reference,
+                self.talos_fastspliceai_cache,
+                self.talos_fastspliceai_nextflow_config,
+                self.talos_fastspliceai_queue,
+                self.talos_fastspliceai_cluster_options,
+                self.talos_fastspliceai_cpus,
+                self.talos_fastspliceai_mem,
+                self.talos_fastspliceai_time,
             ),
         )
 
@@ -861,8 +900,17 @@ class AppState(rx.State):
                 self.talos_nextflow_config,
                 self.talos_conda_env,
                 self.talos_resume,
-                self.talos_spliceai_enabled,
+                self.talos_spliceai_mode,
                 self.talos_spliceai_vcf,
+                self.talos_fastspliceai_bin,
+                self.talos_fastspliceai_reference,
+                self.talos_fastspliceai_cache,
+                self.talos_fastspliceai_nextflow_config,
+                self.talos_fastspliceai_queue,
+                self.talos_fastspliceai_cluster_options,
+                self.talos_fastspliceai_cpus,
+                self.talos_fastspliceai_mem,
+                self.talos_fastspliceai_time,
                 self.talos_log_dir,
                 self.talos_job_name,
                 self.talos_cpus,
@@ -882,8 +930,8 @@ class AppState(rx.State):
                 self.talos_status = "Submit failed"
                 self.status = self.talos_status
             yield
-            self.refresh_talos_log()
-            yield
+            self._refresh_talos_log(update_status=False)
+            yield AppState.autorefresh_logs
         except Exception as error:
             self.talos_output += f"\nERROR: {error}\n"
             self.talos_status = "Failed"
@@ -906,7 +954,7 @@ class AppState(rx.State):
         self.talos_status = f"Cancel requested {job_id}"
         self.status = self.talos_status
         yield
-        self.refresh_talos_log()
+        self._refresh_talos_log(update_status=False)
         yield
 
     def _refresh_talos_log(self, update_status: bool):
@@ -920,6 +968,7 @@ class AppState(rx.State):
         self.talos_output = screen_output
         self.talos_stderr_output = stderr_output
         self.talos_nextflow_log = nextflow_log
+        self.talos_log_revision += 1
         if update_status:
             if self.talos_job_id:
                 self.status = f"Refreshed TALOS log for {self.talos_job_id}"
@@ -928,3 +977,4 @@ class AppState(rx.State):
 
     def refresh_talos_log(self):
         self._refresh_talos_log(update_status=True)
+        yield

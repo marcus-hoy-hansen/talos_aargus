@@ -312,8 +312,17 @@ def write_talos_sbatch_script(
     nextflow_config: str,
     conda_env: str,
     resume: bool,
-    spliceai_enabled: bool = False,
+    spliceai_mode: str = "precomputed",
     spliceai_vcf: str = "",
+    fastspliceai_bin: str = "",
+    fastspliceai_reference: str = "",
+    fastspliceai_cache: str = "",
+    fastspliceai_nextflow_config: str = "",
+    fastspliceai_queue: str = "",
+    fastspliceai_cluster_options: str = "",
+    fastspliceai_cpus: str = "",
+    fastspliceai_mem: str = "",
+    fastspliceai_time: str = "",
     log_dir_name: str = "logs",
     job_name: str = "talos_full",
     cpus: str = "6",
@@ -335,8 +344,17 @@ def write_talos_sbatch_script(
         nextflow_config,
         conda_env,
         resume,
-        spliceai_enabled,
+        spliceai_mode,
         spliceai_vcf,
+        fastspliceai_bin,
+        fastspliceai_reference,
+        fastspliceai_cache,
+        fastspliceai_nextflow_config,
+        fastspliceai_queue,
+        fastspliceai_cluster_options,
+        fastspliceai_cpus,
+        fastspliceai_mem,
+        fastspliceai_time,
     )
     script_path.write_text(
         "\n".join(
@@ -367,8 +385,17 @@ def build_talos_run_command(
     nextflow_config: str,
     conda_env: str,
     resume: bool,
-    spliceai_enabled: bool = False,
+    spliceai_mode: str = "precomputed",
     spliceai_vcf: str = "",
+    fastspliceai_bin: str = "",
+    fastspliceai_reference: str = "",
+    fastspliceai_cache: str = "",
+    fastspliceai_nextflow_config: str = "",
+    fastspliceai_queue: str = "",
+    fastspliceai_cluster_options: str = "",
+    fastspliceai_cpus: str = "",
+    fastspliceai_mem: str = "",
+    fastspliceai_time: str = "",
 ) -> list[str]:
     command = [
         "bash",
@@ -387,11 +414,29 @@ def build_talos_run_command(
         str(project_path(project_dir, processed_annotations)),
         "--nextflow-config",
         str(project_path(project_dir, nextflow_config)),
-        "--spliceai-enabled",
-        "true" if spliceai_enabled else "false",
+        "--spliceai-mode",
+        spliceai_mode,
     ]
-    if spliceai_enabled and spliceai_vcf.strip():
+    if spliceai_mode == "precomputed" and spliceai_vcf.strip():
         command.extend(["--spliceai-vcf", str(project_path(project_dir, spliceai_vcf))])
+    if spliceai_mode in {"fastspliceai", "fastspliceai_cache"}:
+        command.extend(
+            [
+                "--fastspliceai-bin", fastspliceai_bin,
+                "--fastspliceai-reference", fastspliceai_reference,
+                "--fastspliceai-cache", fastspliceai_cache,
+                "--fastspliceai-nextflow-config", str(
+                    Path(fastspliceai_nextflow_config).expanduser()
+                    if Path(fastspliceai_nextflow_config).expanduser().is_absolute()
+                    else Path(tool_dir).expanduser() / fastspliceai_nextflow_config
+                ),
+                "--fastspliceai-queue", fastspliceai_queue,
+                "--fastspliceai-cluster-options", fastspliceai_cluster_options,
+                "--fastspliceai-cpus", fastspliceai_cpus,
+                "--fastspliceai-mem", fastspliceai_mem,
+                "--fastspliceai-time", fastspliceai_time,
+            ],
+        )
     command.extend(["--resume", "true" if resume else "false"])
     return command
 
@@ -405,8 +450,17 @@ def submit_talos_sbatch(
     nextflow_config: str,
     conda_env: str,
     resume: bool,
-    spliceai_enabled: bool = False,
+    spliceai_mode: str = "precomputed",
     spliceai_vcf: str = "",
+    fastspliceai_bin: str = "",
+    fastspliceai_reference: str = "",
+    fastspliceai_cache: str = "",
+    fastspliceai_nextflow_config: str = "",
+    fastspliceai_queue: str = "",
+    fastspliceai_cluster_options: str = "",
+    fastspliceai_cpus: str = "",
+    fastspliceai_mem: str = "",
+    fastspliceai_time: str = "",
     log_dir: str = "logs",
     job_name: str = "talos_full",
     cpus: str = "6",
@@ -423,8 +477,17 @@ def submit_talos_sbatch(
         nextflow_config,
         conda_env,
         resume,
-        spliceai_enabled,
+        spliceai_mode,
         spliceai_vcf,
+        fastspliceai_bin,
+        fastspliceai_reference,
+        fastspliceai_cache,
+        fastspliceai_nextflow_config,
+        fastspliceai_queue,
+        fastspliceai_cluster_options,
+        fastspliceai_cpus,
+        fastspliceai_mem,
+        fastspliceai_time,
         log_dir,
         job_name,
         cpus,

@@ -55,6 +55,27 @@ workflow {
     PREPARE_SINGLE_SAMPLE_VCF(ch_samples)
     def ch_active_vcfs = PREPARE_SINGLE_SAMPLE_VCF.out.vcfs
 
+    if (paramEnabled(params.common_dbsnp_enabled)) {
+        if (!params.common_dbsnp_vcf) {
+            println '--common_dbsnp_vcf is required when --common_dbsnp_enabled is true'
+            exit 1
+        }
+        def common_dbsnp_idx = file("${params.common_dbsnp_vcf}.tbi")
+        if (!common_dbsnp_idx.exists()) {
+            common_dbsnp_idx = file("${params.common_dbsnp_vcf}.csi")
+        }
+        if (!common_dbsnp_idx.exists()) {
+            println "Index not found for --common_dbsnp_vcf: ${params.common_dbsnp_vcf}.tbi or .csi"
+            exit 1
+        }
+        FILTER_COMMON_DBSNP(
+            ch_active_vcfs,
+            Channel.fromPath(params.common_dbsnp_vcf, checkIfExists: true).first(),
+            Channel.fromPath(common_dbsnp_idx, checkIfExists: true).first(),
+        )
+        ch_active_vcfs = FILTER_COMMON_DBSNP.out.vcf
+    }
+
     ch_prepared_manifest = ch_active_vcfs
         .map { sample_id, vcf, _idx -> "${sample_id}\t${vcf}\n" }
         .collectFile(name: 'prepared_manifest.tsv', newLine: false, sort: true, seed: 'sample_id\tvcf_path\n')
@@ -88,27 +109,6 @@ workflow {
     MERGE_COHORT_VCFS(ch_cohort_inputs.collect())
 
     def ch_final_cohort = MERGE_COHORT_VCFS.out.vcf
-
-    if (paramEnabled(params.common_dbsnp_enabled)) {
-        if (!params.common_dbsnp_vcf) {
-            println '--common_dbsnp_vcf is required when --common_dbsnp_enabled is true'
-            exit 1
-        }
-        def common_dbsnp_idx = file("${params.common_dbsnp_vcf}.tbi")
-        if (!common_dbsnp_idx.exists()) {
-            common_dbsnp_idx = file("${params.common_dbsnp_vcf}.csi")
-        }
-        if (!common_dbsnp_idx.exists()) {
-            println "Index not found for --common_dbsnp_vcf: ${params.common_dbsnp_vcf}.tbi or .csi"
-            exit 1
-        }
-        FILTER_COMMON_DBSNP(
-            ch_final_cohort,
-            Channel.fromPath(params.common_dbsnp_vcf, checkIfExists: true).first(),
-            Channel.fromPath(common_dbsnp_idx, checkIfExists: true).first(),
-        )
-        ch_final_cohort = FILTER_COMMON_DBSNP.out.vcf
-    }
 
     if (paramEnabled(params.spliceai_enabled)) {
         if (!params.spliceai_vcf) {

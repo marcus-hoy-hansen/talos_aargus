@@ -172,19 +172,22 @@ in separate boxes below it.
 rebuild the TALOS command itself; it calls `run_dept_talos_local.sh` with
 environment overrides for the selected project folder, TALOS tool folder, input
 TSV, output folder, processed annotations, Nextflow config, conda environment,
-optional SpliceAI lookup, and resume setting. By default the input TSV is the
+SpliceAI mode, and resume setting. By default the input TSV is the
 preflight output `outputs/talos_input.tsv`.
 
 Selecting a project in the Preflight pane also updates the TALOS project folder,
 so a preflighted project can be carried directly into the TALOS pane. The TALOS
 project field remains editable afterward.
 
-`Annotate SpliceAI` controls the main TALOS annotation lookup step, not the
-preflight step. It makes the submitted command include:
+`SpliceAI mode` controls the main TALOS annotation step, not the preflight
+step. Select `precomputed`, `fastspliceai`, `fastspliceai_cache`, or
+`disabled`. The FastSpliceAI executable, reference, cache VCF, and GPU
+resources are loaded from `runner.config`. Precomputed mode makes the submitted
+command include:
 
 ```bash
 bash run_dept_talos_local.sh \
-  --spliceai-enabled true \
+  --spliceai-mode precomputed \
   --spliceai-vcf /path/to/spliceai.vcf.gz
 ```
 
