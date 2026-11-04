@@ -323,6 +323,7 @@ def write_talos_sbatch_script(
     fastspliceai_cpus: str = "",
     fastspliceai_mem: str = "",
     fastspliceai_time: str = "",
+    fastspliceai_annotation: str = "",
     log_dir_name: str = "logs",
     job_name: str = "talos_full",
     cpus: str = "6",
@@ -355,6 +356,7 @@ def write_talos_sbatch_script(
         fastspliceai_cpus,
         fastspliceai_mem,
         fastspliceai_time,
+        fastspliceai_annotation,
     )
     script_path.write_text(
         "\n".join(
@@ -396,6 +398,7 @@ def build_talos_run_command(
     fastspliceai_cpus: str = "",
     fastspliceai_mem: str = "",
     fastspliceai_time: str = "",
+    fastspliceai_annotation: str = "",
 ) -> list[str]:
     command = [
         "bash",
@@ -424,6 +427,7 @@ def build_talos_run_command(
             [
                 "--fastspliceai-bin", fastspliceai_bin,
                 "--fastspliceai-reference", fastspliceai_reference,
+                "--fastspliceai-annotation", fastspliceai_annotation,
                 "--fastspliceai-cache", fastspliceai_cache,
                 "--fastspliceai-nextflow-config", str(
                     Path(fastspliceai_nextflow_config).expanduser()
@@ -461,6 +465,7 @@ def submit_talos_sbatch(
     fastspliceai_cpus: str = "",
     fastspliceai_mem: str = "",
     fastspliceai_time: str = "",
+    fastspliceai_annotation: str = "",
     log_dir: str = "logs",
     job_name: str = "talos_full",
     cpus: str = "6",
@@ -488,6 +493,7 @@ def submit_talos_sbatch(
         fastspliceai_cpus,
         fastspliceai_mem,
         fastspliceai_time,
+        fastspliceai_annotation,
         log_dir,
         job_name,
         cpus,

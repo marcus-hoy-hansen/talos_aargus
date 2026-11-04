@@ -106,6 +106,11 @@ TALOS_NEXTFLOW_CONFIG=config/dept_local.config
 TALOS_CONDA_ENV=/faststorage/project/reanalyses_auh/env/talos2_env
 TALOS_SPLICEAI_ENABLED=true
 TALOS_SPLICEAI_VCF=/faststorage/project/reanalyses_auh/resources/spliceai_scores_KGA_AUH_GRCh_38_Homo_sapiens_converted.vcf.gz
+TALOS_SPLICEAI_MODE=fastspliceai_cache
+TALOS_FASTSPLICEAI_BIN=/faststorage/project/reanalyses_auh/env/fastspliceai_pip/bin/spliceai
+TALOS_FASTSPLICEAI_REFERENCE=/path/to/talos_aargus/large_files/ref.fa
+TALOS_FASTSPLICEAI_ANNOTATION=/path/to/talos_aargus/resources/grch38_MANE_v1.5.txt
+TALOS_FASTSPLICEAI_CACHE=/path/to/shared/spliceai_cache/cache_mane_v1.5.vcf.gz
 TALOS_RESUME=true
 ```
 
@@ -181,8 +186,9 @@ project field remains editable afterward.
 
 `SpliceAI mode` controls the main TALOS annotation step, not the preflight
 step. Select `precomputed`, `fastspliceai`, `fastspliceai_cache`, or
-`disabled`. The FastSpliceAI executable, reference, cache VCF, and GPU
-resources are loaded from `runner.config`. Precomputed mode makes the submitted
+`disabled`. The FastSpliceAI executable, reference, transcript annotation table,
+cache VCF, and GPU resources are loaded from `runner.config`. The default
+transcript annotation table is `grch38_MANE_v1.5.txt`. Precomputed mode makes the submitted
 command include:
 
 ```bash
@@ -193,3 +199,7 @@ bash run_dept_talos_local.sh \
 
 Wrapper environment variables are still accepted for backward compatibility,
 but the runner writes explicit command-line arguments.
+
+Relative FastSpliceAI paths are resolved against the selected project directory
+by `run_dept_talos_local.sh`. This also applies to Slurm submissions, so the
+command can be submitted from any current directory.

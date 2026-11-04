@@ -104,6 +104,10 @@
         "gnomad_zip": {
           "type": "string",
           "description": "Echtvar-formatted annotation data for gnomAD, default is in large_files."
+        },
+        "fastspliceai_annotation": {
+          "type": "string",
+          "description": "Optional FastSpliceAI transcript annotation table. Defaults to the packaged GRCh38 table."
         }
       }
     }

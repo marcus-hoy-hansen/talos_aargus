@@ -16,6 +16,7 @@ SPLICEAI_MODE="${SPLICEAI_MODE:-precomputed}"
 SPLICEAI_VCF="${SPLICEAI_VCF:-/faststorage/project/reanalyses_auh/resources/spliceai_scores_KGA_AUH_GRCh_38_Homo_sapiens_converted.vcf.gz}"
 FASTSPLICEAI_BIN="${FASTSPLICEAI_BIN:-/faststorage/project/reanalyses_auh/env/fastspliceai_pip/bin/spliceai}"
 FASTSPLICEAI_REFERENCE="${FASTSPLICEAI_REFERENCE:-}"
+FASTSPLICEAI_ANNOTATION="${FASTSPLICEAI_ANNOTATION:-}"
 FASTSPLICEAI_CACHE="${FASTSPLICEAI_CACHE:-}"
 FASTSPLICEAI_NEXTFLOW_CONFIG="${FASTSPLICEAI_NEXTFLOW_CONFIG:-${REPO_DIR}/runner/talos_fastspliceai.config}"
 FASTSPLICEAI_QUEUE="${FASTSPLICEAI_QUEUE:-gpu-l40s,gpu-h200}"
@@ -38,6 +39,7 @@ while [[ $# -gt 0 ]]; do
         --spliceai-vcf) SPLICEAI_VCF="$2"; shift 2 ;;
         --fastspliceai-bin) FASTSPLICEAI_BIN="$2"; shift 2 ;;
         --fastspliceai-reference) FASTSPLICEAI_REFERENCE="$2"; shift 2 ;;
+        --fastspliceai-annotation) FASTSPLICEAI_ANNOTATION="$2"; shift 2 ;;
         --fastspliceai-cache) FASTSPLICEAI_CACHE="$2"; shift 2 ;;
         --fastspliceai-nextflow-config) FASTSPLICEAI_NEXTFLOW_CONFIG="$2"; shift 2 ;;
         --fastspliceai-queue) FASTSPLICEAI_QUEUE="$2"; shift 2 ;;
@@ -62,6 +64,7 @@ Options:
   --spliceai-vcf PATH
   --fastspliceai-bin PATH
   --fastspliceai-reference PATH
+  --fastspliceai-annotation PATH_OR_GRCH38
   --fastspliceai-cache PATH
   --fastspliceai-nextflow-config PATH
   --fastspliceai-queue PARTITION
@@ -76,6 +79,29 @@ EOF
         *) echo "[ERROR] Unknown argument: $1" >&2; exit 1 ;;
     esac
 done
+
+if [[ "${RUN_DIR}" != /* ]]; then
+    RUN_DIR="$(cd "${RUN_DIR}" && pwd -P)"
+fi
+
+resolve_run_path() {
+    local value="$1"
+    if [[ -z "${value}" || "${value}" == /* ]]; then
+        printf '%s' "${value}"
+    else
+        printf '%s/%s' "${RUN_DIR}" "${value}"
+    fi
+}
+
+SPLICEAI_VCF="$(resolve_run_path "${SPLICEAI_VCF}")"
+FASTSPLICEAI_BIN="$(resolve_run_path "${FASTSPLICEAI_BIN}")"
+FASTSPLICEAI_REFERENCE="$(resolve_run_path "${FASTSPLICEAI_REFERENCE}")"
+FASTSPLICEAI_CACHE="$(resolve_run_path "${FASTSPLICEAI_CACHE}")"
+if [[ -z "${FASTSPLICEAI_ANNOTATION}" ]]; then
+    FASTSPLICEAI_ANNOTATION="${REPO_DIR}/resources/grch38_MANE_v1.5.txt"
+elif [[ "${FASTSPLICEAI_ANNOTATION}" != "grch37" && "${FASTSPLICEAI_ANNOTATION}" != "grch38" ]]; then
+    FASTSPLICEAI_ANNOTATION="$(resolve_run_path "${FASTSPLICEAI_ANNOTATION}")"
+fi
 
 case "${SPLICEAI_MODE}" in
 precomputed)
@@ -136,7 +162,7 @@ else
 fi
 
 export PYTHONPATH="${REPO_DIR}/src${PYTHONPATH:+:${PYTHONPATH}}"
-export FASTSPLICEAI_BIN FASTSPLICEAI_REFERENCE FASTSPLICEAI_CACHE FASTSPLICEAI_QUEUE FASTSPLICEAI_CLUSTER_OPTIONS
+export FASTSPLICEAI_BIN FASTSPLICEAI_REFERENCE FASTSPLICEAI_ANNOTATION FASTSPLICEAI_CACHE FASTSPLICEAI_QUEUE FASTSPLICEAI_CLUSTER_OPTIONS
 export FASTSPLICEAI_CPUS FASTSPLICEAI_MEM FASTSPLICEAI_TIME
 export NXF_HOME="${NXF_HOME:-${RUN_DIR}/.nextflow-local}"
 export NXF_PLUGINS_DIR="${NXF_PLUGINS_DIR:-${NXF_HOME}/plugins}"
@@ -162,7 +188,7 @@ fi
 
 if [[ "${SPLICEAI_MODE}" == "fastspliceai" || "${SPLICEAI_MODE}" == "fastspliceai_cache" ]]; then
     nextflow_configs+=(-c "${FASTSPLICEAI_NEXTFLOW_CONFIG}")
-    nextflow_args+=(--fastspliceai_bin "${FASTSPLICEAI_BIN}" --fastspliceai_reference "${FASTSPLICEAI_REFERENCE}")
+    nextflow_args+=(--fastspliceai_bin "${FASTSPLICEAI_BIN}" --fastspliceai_reference "${FASTSPLICEAI_REFERENCE}" --fastspliceai_annotation "${FASTSPLICEAI_ANNOTATION}")
     if [[ "${SPLICEAI_MODE}" == "fastspliceai_cache" ]]; then
         nextflow_args+=(--fastspliceai_cache "${FASTSPLICEAI_CACHE}")
     fi

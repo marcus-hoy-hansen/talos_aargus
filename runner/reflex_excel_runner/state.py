@@ -102,7 +102,8 @@ class AppState(rx.State):
     talos_spliceai_vcf: str = "/faststorage/project/reanalyses_auh/resources/spliceai_scores_KGA_AUH_GRCh_38_Homo_sapiens_converted.vcf.gz"
     talos_fastspliceai_bin: str = "/faststorage/project/reanalyses_auh/env/fastspliceai_pip/bin/spliceai"
     talos_fastspliceai_reference: str = str(TALOS_REPO_DIR / "large_files" / "ref.fa")
-    talos_fastspliceai_cache: str = str(TALOS_REPO_DIR / "processed_annotations" / "fastspliceai" / "cache.vcf.gz")
+    talos_fastspliceai_annotation: str = str(TALOS_REPO_DIR / "resources" / "grch38_MANE_v1.5.txt")
+    talos_fastspliceai_cache: str = "/faststorage/project/reanalyses_auh/v2/spliceai_cache/cache_mane_v1.5.vcf.gz"
     talos_fastspliceai_nextflow_config: str = str(TALOS_REPO_DIR / "runner" / "talos_fastspliceai.config")
     talos_fastspliceai_queue: str = "gpu-l40s,gpu-h200"
     talos_fastspliceai_cluster_options: str = "--account=reanalyses_auh --gpus=1"
@@ -227,6 +228,7 @@ class AppState(rx.State):
         self.talos_spliceai_vcf = config.get("TALOS_SPLICEAI_VCF", self.talos_spliceai_vcf)
         self.talos_fastspliceai_bin = config.get("TALOS_FASTSPLICEAI_BIN", self.talos_fastspliceai_bin)
         self.talos_fastspliceai_reference = config.get("TALOS_FASTSPLICEAI_REFERENCE", self.talos_fastspliceai_reference)
+        self.talos_fastspliceai_annotation = config.get("TALOS_FASTSPLICEAI_ANNOTATION", self.talos_fastspliceai_annotation)
         self.talos_fastspliceai_cache = config.get("TALOS_FASTSPLICEAI_CACHE", self.talos_fastspliceai_cache)
         self.talos_fastspliceai_nextflow_config = config.get(
             "TALOS_FASTSPLICEAI_NEXTFLOW_CONFIG", self.talos_fastspliceai_nextflow_config,
@@ -818,6 +820,7 @@ class AppState(rx.State):
                 self.talos_fastspliceai_cpus,
                 self.talos_fastspliceai_mem,
                 self.talos_fastspliceai_time,
+                self.talos_fastspliceai_annotation,
             ),
         )
 
@@ -911,6 +914,7 @@ class AppState(rx.State):
                 self.talos_fastspliceai_cpus,
                 self.talos_fastspliceai_mem,
                 self.talos_fastspliceai_time,
+                self.talos_fastspliceai_annotation,
                 self.talos_log_dir,
                 self.talos_job_name,
                 self.talos_cpus,
