@@ -180,14 +180,6 @@ start_download "https://mitimpact.mcb2lab.org/cdn/MitImpact_db_3.1.3.txt.zip"
 AM="AlphaMissense_hg38.tsv.gz"
 start_download "https://zenodo.org/records/8208688/files/AlphaMissense_hg38.tsv.gz?download=1" "${AM}"
 
-THIS_MONTH=$(date '+%Y-%m')
-
-submission_summary="https://ftp.ncbi.nlm.nih.gov/pub/clinvar/tab_delimited/submission_summary.txt.gz"
-variant_summary="https://ftp.ncbi.nlm.nih.gov/pub/clinvar/tab_delimited/variant_summary.txt.gz"
-
-start_download $submission_summary "submissions_${THIS_MONTH}.txt.gz"
-start_download $variant_summary "variants_${THIS_MONTH}.txt.gz"
-
 await
 
 #if compressed exists, but decompressed doesn't, gunzip it

@@ -1,4 +1,5 @@
 process DownloadClinVarFiles {
+    containerOptions '--bind /etc/ssl/certs/ca-bundle.crt:/etc/ssl/certs/ca-bundle.crt'
     memory 2.GB
 
     errorStrategy {'retry'}
@@ -14,6 +15,10 @@ process DownloadClinVarFiles {
     shell:
         """
         set -euo pipefail
+        export http_proxy=http://proxy-default:3128
+        export https_proxy=http://proxy-default:3128
+        export HTTPS_CA_FILE=/etc/ssl/certs/ca-bundle.crt
+        export SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt
 
         wget '!{params.submission_summary}' -O submissions_!{timestamp}.txt.gz
         wget '!{params.variant_summary}' -O variants_!{timestamp}.txt.gz

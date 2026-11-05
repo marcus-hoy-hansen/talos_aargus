@@ -278,7 +278,7 @@ async def get_all_known_panels(panel_ids: set[int], activities: bool = False) ->
 
     tasks = []
 
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(trust_env=True) as session:
         for panel_id in panel_ids:
             if activities:
                 tasks.append(asyncio.ensure_future(get_single_panel_activities(session, panel_id)))
